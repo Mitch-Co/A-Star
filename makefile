@@ -9,9 +9,10 @@ SRC_DIR=./src
 BIN_DIR=./bin
 
 HEDS := $(wildcard $(HED_DIR)/*.h)
-SRCS := $(wildcard $(SCR_DIR)/*.c)
+SRCS := $(wildcard $(SRC_DIR)/*.c)
 OBJS := $(addprefix $(BIN_DIR)/,$(notdir $(HEDS:%.h=%.o)))
-PROG_NAME=solver
+
+PROG_NAME=$(filter-out $(notdir $(HEDS:%.h=%)),$(notdir $(SRCS:%.c=%)))
 PROG_BIN=$(BIN_DIR)/$(PROG_NAME)
 PROG_SRC=$(SRC_DIR)/$(PROG_NAME).c
 
