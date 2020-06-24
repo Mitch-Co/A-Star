@@ -7,10 +7,10 @@
 typedef uint8_t BYTE;
 
 typedef struct BMPHEADER {
-    //
+    //Should be 0x4d42 to identify bitmap file
     uint16_t signiture;
 
-    // In bytes
+    // File size in bytes
     uint32_t fileSize;
     
     // Not to be touched
@@ -86,12 +86,16 @@ typedef struct BMPFILE {
 
 } BMP;
 
+// Displays error message for a function
 void errMsg(char func[],char err[]);
 
+// Frees a BMP struct and all subelements
 void freeBMP();
 
+// Creates a BMP struct
 BMP* newBMP();
 
+// Reads in a BMP file and returns a BMP struct as a pointer
 BMP* readBMP(char fileName[]);
 
 #endif
