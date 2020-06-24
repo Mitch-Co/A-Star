@@ -10,9 +10,10 @@ void errMsg(char func[],char err[])
     return;
 }
 
-void freeBMP()
+void freeBMP(BMP** toFree)
 {
 
+    free(*toFree);
 }
 
 BMP* newBMP()
@@ -24,6 +25,8 @@ BMP* newBMP()
 
 BMP* readBMP(char fileName[]) 
 {
+    /* INITIALIZATION AND ERROR CHECKING */
+
     if(fileName == NULL)
     {
         errMsg("readBMP", "input filename is NULL!");
@@ -46,7 +49,7 @@ BMP* readBMP(char fileName[])
     if(fileNameSize > longestFileName || fileNameSize < 5)
     {
        errMsg("readBMP", "File name outside of allowable size bounds");
-       freeBMP(toReturn);
+       freeBMP(&toReturn);
        return NULL;
     }
 
@@ -54,7 +57,7 @@ BMP* readBMP(char fileName[])
     if(fileName[fileNameSize - 4] != '.' || fileName[fileNameSize - 3] != 'b' || fileName[fileNameSize - 2] != 'm' || fileName[fileNameSize - 1] != 'p')
     {
        errMsg("readBMP", "File name not valid \".bmp\" file!");
-       freeBMP(toReturn);
+       freeBMP(&toReturn);
        return NULL;
     }
 
@@ -66,6 +69,7 @@ BMP* readBMP(char fileName[])
         return NULL;
     }
 
+    /* START PASS 1 */
 
 
     // unsigned char* buffer = malloc(sizeof(char));
