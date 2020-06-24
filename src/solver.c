@@ -1,12 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include "directTest.h"
 #include "bmp.h"
 
 int main()
 {
-    readBMP();
-    readBMP2();
+    readBMP("9x9.bmp");
     return 0;
 }
