@@ -5,6 +5,6 @@
 
 int main()
 {
-    readBMP("9x9.bmp");
+    free(readBMP("9x9.bmp"));
     return 0;
 }

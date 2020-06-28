@@ -45,9 +45,9 @@ uint32_t bytesToUINT32(BYTE* byteArray, int numBytes)
     // Conversion starts at numBytes because byteArray is in little endian
     for(int i = numBytes - 1; i >= 0; i--)
     {
-        // Multiply by 100 to bump the last added byte up a byte
-        // EXAMPLE: 0x4d * 0x100 = 0x4d00
-        toReturn *= 0x100;
+        // Bitshift by 8 to bump the previous byte added up one byte
+        // EXAMPLE: 0000000011111111 --> 1111111100000000
+        toReturn <<= 8;
         toReturn += byteArray[i];
     }
 
@@ -76,9 +76,9 @@ uint16_t bytesToUINT16(BYTE* byteArray, int numBytes)
     // Conversion starts at numBytes because byteArray is in little endian
     for(int i = numBytes - 1; i >= 0; i--)
     {
-        // Multiply by 100 to bump the last added byte up a byte
-        // EXAMPLE: 0x4d * 0x100 = 0x4d00
-        toReturn *= 0x100;
+        // Bitshift by 8 to bump the previous byte added up one byte
+        // EXAMPLE: 0000000011111111 --> 1111111100000000
+        toReturn <<= 8;
         toReturn += byteArray[i];
     }
 
@@ -129,6 +129,8 @@ BMP* readBMP(char fileName[])
     if(fp == NULL)
     {
         errMsg("readBMP", "Failed to open file");
+        freeBMP(&toReturn);
+        fclose(fp);
         return NULL;
     }
 
@@ -139,11 +141,13 @@ BMP* readBMP(char fileName[])
         before reading is attempted.
         Verify that file:
             - Is a bmp file
+            - Has correct DIB header
             - Filesize is correctly listed
             - Bit depth is above 16bit (optional)
             - Has no compression
     */
 
+    // An input buffer for the binary file
     BYTE* byteBuffer = malloc(sizeof(BYTE) * 8);
 
     // Used to check the return value of various file functions
@@ -156,6 +160,7 @@ BMP* readBMP(char fileName[])
         errMsg("readBMP", "File is not a bitmap file (does not have valid bitmap signature)!");
         free(byteBuffer);
         freeBMP(&toReturn);
+        fclose(fp);
         return NULL;
     }
     if(bytesToUINT16(byteBuffer, 2) != bmpSignature)
@@ -163,7 +168,103 @@ BMP* readBMP(char fileName[])
         errMsg("readBMP", "File is not a bitmap file (does not have valid bitmap signature)!");
         free(byteBuffer);
         freeBMP(&toReturn);
+        fclose(fp);
+        return NULL;
     }
+
+    // Check that filesize is listed correctly
+    long fileSize = 0;
+    uint32_t listedSize = 0;
+
+    // Seek to end of file to find length
+    fseek(fp, 0L, SEEK_END);
+    fileSize = ftell(fp);
+
+    // Seek to 0x2 (long) (position of fileSize)
+    fseek(fp, 0x2L, SEEK_SET);
+    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
+    if(returnChk != sizeof(BYTE) * 4)
+    {
+        errMsg("readBMP", "");
+        free(byteBuffer);
+        freeBMP(&toReturn);
+        fclose(fp);
+        return NULL;
+    }
+    listedSize = bytesToUINT32(byteBuffer, 4);
+
+    if(listedSize != fileSize)
+    {
+        errMsg("readBMP", "File header contains invalid file size!");
+        free(byteBuffer);
+        freeBMP(&toReturn);
+        fclose(fp);
+        return NULL;
+    }
+
+    //Check if header is BITMAPINFOHEADER or newer
+    fseek(fp, 0x0EL, SEEK_SET);
+    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
+    if (returnChk != sizeof(BYTE) * 4)
+    {
+        errMsg("readBMP", "File is not a bitmap file (does not have valid bitmap header)!");
+        free(byteBuffer);
+        freeBMP(&toReturn);
+        fclose(fp);
+        return NULL;
+    }
+    if(bytesToUINT32(byteBuffer, 4) < 40)
+    {
+        errMsg("readBMP", "Bitmap file has unknown header DIB!");
+        free(byteBuffer);
+        freeBMP(&toReturn);
+        fclose(fp);
+        return NULL;
+    }
+    
+    // Check file compression
+    fseek(fp, 0x1EL, SEEK_SET);
+    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
+    if (returnChk != sizeof(BYTE) * 4)
+    {
+        errMsg("readBMP", "File is not a bitmap file (does not have valid bitmap header)!");
+        free(byteBuffer);
+        freeBMP(&toReturn);
+        fclose(fp);
+        return NULL;
+    }
+    if(bytesToUINT32(byteBuffer, 4) != 0x0)
+    {
+        errMsg("readBMP", "Bitmap file has compression enabled!\n readBMP only accepts non compressed bitmaps!");
+        free(byteBuffer);
+        freeBMP(&toReturn);
+        fclose(fp);
+        return NULL;
+    }
+
+    //Check bit depth
+    fseek(fp, 0x1CL, SEEK_SET);
+    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
+    if (returnChk != sizeof(BYTE) * 4)
+    {
+        errMsg("readBMP", "File is not a bitmap file (does not have valid bitmap header)!");
+        free(byteBuffer);
+        freeBMP(&toReturn);
+        fclose(fp);
+        return NULL;
+    }
+    int bitDepth = bytesToUINT32(byteBuffer, 4);
+    if(bitDepth != 32 && bitDepth != 24)
+    {
+        errMsg("readBMP", "Bitmap file has unknown depth (only bit depths of 24 or 32 bits are able to be read)!");
+        free(byteBuffer);
+        freeBMP(&toReturn);
+        fclose(fp);
+        return NULL;
+    }
+
+
+
     
     // unsigned char* buffer = malloc(sizeof(char));
     // FILE* fp;
@@ -183,8 +284,8 @@ BMP* readBMP(char fileName[])
     //     count++;
     // }
 
-    
-
+    fclose(fp);
+    free(byteBuffer);
     return toReturn;
 
 }
