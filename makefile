@@ -2,7 +2,7 @@
 .PHONY = all clean 
 
 CC=gcc
-CFLAGS=-std=c99 -I ./src -I ./src/headers
+CFLAGS=-std=c99 -Wall -pedantic -I ./src -I ./src/headers
 
 HED_DIR=./src/headers
 SRC_DIR=./src

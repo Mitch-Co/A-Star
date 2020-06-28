@@ -1,8 +1,12 @@
 #ifndef BMP_H
 #define BMP_H
 
-#define longestFileName 100
 #include <stdint.h>
+#include <stdbool.h>
+
+#define longestFileName 100
+#define bmpSignature 0x4d42
+
 
 typedef uint8_t BYTE;
 
@@ -17,7 +21,7 @@ typedef struct BMPHEADER {
     uint16_t reserved1;
     uint16_t reserved2;
 
-    // The byte where the inage data begins
+    // The byte where the image data begins
     uint32_t offset; 
 } BMP_HEAD;
 
@@ -38,6 +42,11 @@ typedef struct BMPDIBHEADER {
 
     // Must be 1 according to spec
     uint16_t colorPlanes;
+
+    // Can be either 1, 4, 8, 16, 24, or 32
+    // This program only aims to be compatiable with 24 or 32 bpp bitmap
+    // 32-bit color is 24 bit color with an extra 8 bit alpha channel
+    uint16_t bitsPerPixel;
 
     // MUST be 0, or image is compressed and regular operation will likely fail
     uint32_t compression;
@@ -65,10 +74,26 @@ typedef struct BMPDIBHEADER {
     // "Generally ignored" - Wikipedia
     uint32_t importantColors;
 
-
 } BMP_DIB;
 
+typedef struct BMPPIXEL {
+    int red;
+    int blue;
+    int green;
+    int alpha;
+
+} PIXEL;
+
 typedef struct BMPDATA {
+    int width;
+    int height;
+    int area;
+    int bitDepth;
+    int bitsPerChannel;
+    bool hasAlpha;
+    int bitsForAlpha;
+
+    PIXEL* data;
 
 } BMP_DATA;
 
@@ -95,6 +120,11 @@ void freeBMP();
 // Creates a BMP struct
 BMP* newBMP();
 
+// Takes an array of bytes in little endian and return a uint_32t of those bytes
+uint32_t bytesToUINT32(BYTE* byteArray, int numBytes);
+
+// Takes an array of bytes in little endian and return a uint_32t of those bytes
+uint16_t bytesToUINT16(BYTE* byteArray, int numBytes);
 // Reads in a BMP file and returns a BMP struct as a pointer
 BMP* readBMP(char fileName[]);
 

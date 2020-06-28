@@ -23,6 +23,69 @@ BMP* newBMP()
     return toReturn;
 }
 
+// NOTE: BYTEARRAY IN LITTLE ENDIAN
+uint32_t bytesToUINT32(BYTE* byteArray, int numBytes)
+{
+    uint32_t toReturn = 0x0;
+    
+    // Input Checking
+    if(byteArray == NULL)
+    {
+        return toReturn;
+    }
+    if (numBytes <= 0)
+    {
+        return toReturn;
+    }
+    if (numBytes > 4)
+    {
+        numBytes = 4;
+    }
+
+    // Conversion starts at numBytes because byteArray is in little endian
+    for(int i = numBytes - 1; i >= 0; i--)
+    {
+        // Multiply by 100 to bump the last added byte up a byte
+        // EXAMPLE: 0x4d * 0x100 = 0x4d00
+        toReturn *= 0x100;
+        toReturn += byteArray[i];
+    }
+
+    return toReturn;
+}
+
+// NOTE: BYTEARRAY IN LITTLE ENDIAN
+uint16_t bytesToUINT16(BYTE* byteArray, int numBytes)
+{
+    uint16_t toReturn = 0x0;
+    
+    // Input Checking
+    if(byteArray == NULL)
+    {
+        return toReturn;
+    }
+    if (numBytes <= 0)
+    {
+        return toReturn;
+    }
+    if (numBytes > 2)
+    {
+        numBytes = 2;
+    }
+
+    // Conversion starts at numBytes because byteArray is in little endian
+    for(int i = numBytes - 1; i >= 0; i--)
+    {
+        // Multiply by 100 to bump the last added byte up a byte
+        // EXAMPLE: 0x4d * 0x100 = 0x4d00
+        toReturn *= 0x100;
+        toReturn += byteArray[i];
+    }
+
+    return toReturn;
+}
+
+
 BMP* readBMP(char fileName[]) 
 {
     /* INITIALIZATION AND ERROR CHECKING */
@@ -71,7 +134,37 @@ BMP* readBMP(char fileName[])
 
     /* START PASS 1 */
 
+    /*
+        Pass 1 is meant to verify that everything is in order
+        before reading is attempted.
+        Verify that file:
+            - Is a bmp file
+            - Filesize is correctly listed
+            - Bit depth is above 16bit (optional)
+            - Has no compression
+    */
 
+    BYTE* byteBuffer = malloc(sizeof(BYTE) * 8);
+
+    // Used to check the return value of various file functions
+    int returnChk = 0;
+
+    // Check for bitmap header signature at beginning of file
+    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 2, fp);
+    if (returnChk != sizeof(BYTE) * 2)
+    {
+        errMsg("readBMP", "File is not a bitmap file (does not have valid bitmap signature)!");
+        free(byteBuffer);
+        freeBMP(&toReturn);
+        return NULL;
+    }
+    if(bytesToUINT16(byteBuffer, 2) != bmpSignature)
+    {
+        errMsg("readBMP", "File is not a bitmap file (does not have valid bitmap signature)!");
+        free(byteBuffer);
+        freeBMP(&toReturn);
+    }
+    
     // unsigned char* buffer = malloc(sizeof(char));
     // FILE* fp;
 
