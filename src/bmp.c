@@ -153,6 +153,16 @@ BMP* readBMP(char fileName[])
     // Used to check the return value of various file functions
     int returnChk = 0;
 
+    // Actual fileSize stored here - to compare against listedSize for verification of size
+    long fileSize = 0;
+
+    // Temp variables to store read in data for pass 2
+    uint16_t signiture = 0;
+    uint32_t listedSize = 0;
+    uint32_t headerSize = 0;
+    uint32_t compression = 0;
+    uint32_t bitDepth = 0;
+
     // Check for bitmap header signature at beginning of file
     returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 2, fp);
     if (returnChk != sizeof(BYTE) * 2)
@@ -163,7 +173,8 @@ BMP* readBMP(char fileName[])
         fclose(fp);
         return NULL;
     }
-    if(bytesToUINT16(byteBuffer, 2) != bmpSignature)
+    signiture = bytesToUINT16(byteBuffer, 2);
+    if(signiture != bmpSignature)
     {
         errMsg("readBMP", "File is not a bitmap file (does not have valid bitmap signature)!");
         free(byteBuffer);
@@ -171,10 +182,6 @@ BMP* readBMP(char fileName[])
         fclose(fp);
         return NULL;
     }
-
-    // Check that filesize is listed correctly
-    long fileSize = 0;
-    uint32_t listedSize = 0;
 
     // Seek to end of file to find length
     fseek(fp, 0L, SEEK_END);
@@ -192,7 +199,6 @@ BMP* readBMP(char fileName[])
         return NULL;
     }
     listedSize = bytesToUINT32(byteBuffer, 4);
-
     if(listedSize != fileSize)
     {
         errMsg("readBMP", "File header contains invalid file size!");
@@ -213,7 +219,8 @@ BMP* readBMP(char fileName[])
         fclose(fp);
         return NULL;
     }
-    if(bytesToUINT32(byteBuffer, 4) < 40)
+    headerSize = bytesToUINT32(byteBuffer, 4);
+    if(headerSize < 40)
     {
         errMsg("readBMP", "Bitmap file has unknown header DIB!");
         free(byteBuffer);
@@ -233,7 +240,8 @@ BMP* readBMP(char fileName[])
         fclose(fp);
         return NULL;
     }
-    if(bytesToUINT32(byteBuffer, 4) != 0x0)
+    compression = bytesToUINT32(byteBuffer, 4);
+    if(compression != 0x0)
     {
         errMsg("readBMP", "Bitmap file has compression enabled!\n readBMP only accepts non compressed bitmaps!");
         free(byteBuffer);
@@ -253,7 +261,7 @@ BMP* readBMP(char fileName[])
         fclose(fp);
         return NULL;
     }
-    int bitDepth = bytesToUINT32(byteBuffer, 4);
+    bitDepth = bytesToUINT32(byteBuffer, 4);
     if(bitDepth != 32 && bitDepth != 24)
     {
         errMsg("readBMP", "Bitmap file has unknown depth (only bit depths of 24 or 32 bits are able to be read)!");
@@ -263,30 +271,94 @@ BMP* readBMP(char fileName[])
         return NULL;
     }
 
-
-
     
-    // unsigned char* buffer = malloc(sizeof(char));
-    // FILE* fp;
+    /* START PASS 2 */
 
-    // fp = fopen("9x9.bmp","rb");
+    /*
+        Pass 2 is meant to fill the BMP struct with all data from the bitmap file.
+        Some data stored redundantly; the total memory size of all structs 
+        should be around 1.5 - 2.2x the size of the file.
+    */
 
-    // int count = 0;
+    // We already have valid data from pass 1
+    // Let's use it to fill in some BMP data
 
-    // while(fread(buffer,sizeof(char),1,fp) != 0)
-    // {
-    //     if(count >= 10)
-    //     {
-    //         printf("\n");
-    //         count = 0;
-    //     }
-    //     printf("%x ",*buffer);
-    //     count++;
-    // }
+    toReturn->head.signiture = signiture;
+    toReturn->head.fileSize = listedSize;
+
+    toReturn->dib.headerSize = headerSize;
+    toReturn->dib.compression = compression;
+    toReturn->dib.bitsPerPixel = bitDepth;
+
+    // Grab the rest of the header/DIB
+    // General format as follows:
+    // Seek to data location -> Grab data -> Check if data grabbed -> Put in struct
+
+    // offset
+    fseek(fp, 0xAL, SEEK_SET);
+    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
+    if(returnChk != sizeof(BYTE) * 4) {goto pass2Error;}
+    toReturn->head.offset = bytesToUINT32(byteBuffer, 4);
+
+    // bmpWidth
+    fseek(fp, 0x12L, SEEK_SET);
+    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
+    if(returnChk != sizeof(BYTE) * 4) {goto pass2Error;}
+    toReturn->dib.bmpWidth = bytesToUINT32(byteBuffer, 4);;
+
+    // bmpHeight
+    fseek(fp, 0x16L, SEEK_SET);
+    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
+    if(returnChk != sizeof(BYTE) * 4) {goto pass2Error;}
+    toReturn->dib.bmpHeight = bytesToUINT32(byteBuffer, 4);
+
+    // colorPlanes
+    fseek(fp, 0x1AL, SEEK_SET);
+    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 2, fp);
+    if(returnChk != sizeof(BYTE) * 2) {goto pass2Error;}
+    toReturn->dib.colorPlanes = bytesToUINT16(byteBuffer, 2);
+
+    // imageSize
+    fseek(fp, 0x22L, SEEK_SET);
+    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
+    if(returnChk != sizeof(BYTE) * 4) {goto pass2Error;}
+    toReturn->dib.imageSize = bytesToUINT32(byteBuffer, 4);
+
+    // resWidthPPM
+    fseek(fp, 0x26L, SEEK_SET);
+    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
+    if(returnChk != sizeof(BYTE) * 4) {goto pass2Error;}
+    toReturn->dib.resWidthPPM = bytesToUINT32(byteBuffer, 4);
+
+    // resHeightPPM
+    fseek(fp, 0x2AL, SEEK_SET);
+    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
+    if(returnChk != sizeof(BYTE) * 4) {goto pass2Error;}
+    toReturn->dib.resHeightPPM = bytesToUINT32(byteBuffer, 4);
+
+    // colorPalette
+    fseek(fp, 0x2EL, SEEK_SET);
+    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
+    if(returnChk != sizeof(BYTE) * 4) {goto pass2Error;}
+    toReturn->dib.colorPalette = bytesToUINT32(byteBuffer, 4);
+
+    // importantColors
+    fseek(fp, 0x32L, SEEK_SET);
+    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
+    if(returnChk != sizeof(BYTE) * 4) {goto pass2Error;}
+    toReturn->dib.importantColors = bytesToUINT32(byteBuffer, 4);
 
     fclose(fp);
     free(byteBuffer);
     return toReturn;
+
+    pass2Error:
+    errMsg("readBMP", "Reading BMP file failed!");
+    free(byteBuffer);
+    freeBMP(&toReturn);
+    fclose(fp);
+    return NULL;
+
 
 }
 
