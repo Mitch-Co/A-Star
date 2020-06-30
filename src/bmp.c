@@ -12,14 +12,18 @@ void errMsg(char func[],char err[])
 
 void freeBMP(BMP** toFree)
 {
-
+    BMP* temp = (*toFree);
+    if(temp->data.colorData != NULL)
+    {
+        free(temp->data.colorData);
+    }
     free(*toFree);
 }
 
 BMP* newBMP()
 {
     BMP* toReturn = malloc(sizeof(BMP));
-    
+    toReturn->data.colorData = NULL;
     return toReturn;
 }
 
@@ -347,6 +351,85 @@ BMP* readBMP(char fileName[])
     returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
     if(returnChk != sizeof(BYTE) * 4) {goto pass2Error;}
     toReturn->dib.importantColors = bytesToUINT32(byteBuffer, 4);
+
+    /*
+        Just your daily reminder that height and width are signed.
+        This is not included in pass 1 because having negitive BMP does not mean your
+        file is invalid. For some reason...
+    */
+    if(toReturn->dib.bmpWidth <= 0 || toReturn->dib.bmpHeight <= 0)
+    {
+        goto pass2Error;
+    }
+
+    /* READ IN BMP PIXEL DATA */
+
+    /*
+        NOTE: This rowSize calculation looks complicated because
+        I did not want to link the math library, and as such abused
+        the fact that c uses a floor function to force division into ints.
+        The proper rowSize calculation is as follows:
+        RowSize = (ceil(BitsPerPixel * ImageWidth)/32) * 4
+
+        This rounds the RowSize up to a multiple of 4 bytes.
+    */
+    int rowSize = 0;
+    int rowPadding = 0;
+    int bytesPerPixel = toReturn->dib.bitsPerPixel/8;
+    rowSize = ((toReturn->dib.bmpWidth * toReturn->dib.bitsPerPixel) + 31) / 32;
+    rowSize = rowSize * 4;
+
+    // Padding is equal to the (bytes) rowsize
+    // minus the amount of bytes used to store the pixel data
+    rowPadding = rowSize - (toReturn->dib.bmpWidth * (bytesPerPixel));
+
+    /* START FILLING IN BMPDATA*/
+    toReturn->data.width = toReturn->dib.bmpWidth;
+    toReturn->data.height = toReturn->dib.bmpHeight;
+    toReturn->data.area = toReturn->data.width * toReturn->data.height;
+    toReturn->data.bitDepth = toReturn->dib.bitsPerPixel;
+    // TODO: bitsPerChannel, hasAlpha(?) bitsForAlpha
+
+    PIXEL* pixArray = malloc(sizeof(PIXEL) * toReturn->data.area);
+    printf("rowsize = %d padding = %d\n", rowSize, rowPadding);
+
+    // Start at beginning of color data
+    fseek(fp, toReturn->head.offset, SEEK_SET);
+
+    // Used so for loops dont have to do pointer junk every time they
+    // want to check their end condition
+    int tempHeight = toReturn->data.height;
+    int tempWidth = toReturn->data.width;
+
+    // Read in all pixel data
+    for(int y = 0; y < tempHeight; y++)
+    {
+        for (int x = 0; x < tempWidth; x++)
+        {
+            returnChk = fread(byteBuffer, sizeof(BYTE), bytesPerPixel, fp);
+            if(returnChk != bytesPerPixel)
+            {
+                goto pass2Error;
+            }
+            pixArray[x + (tempWidth * y)].value = bytesToUINT32(byteBuffer, bytesPerPixel);
+        }
+        // Skip row padding
+        fseek(fp, rowPadding, SEEK_CUR);
+    }
+    
+    toReturn->data.colorData = pixArray;
+
+    // TODO: Remove this test print statement
+    for(int y = 0; y < tempHeight; y++)
+    {
+        printf("y = %d - ", y);
+        for (int x = 0; x < tempWidth; x++)
+        {
+            printf("%x ",(toReturn->data.colorData)[x + (tempWidth * y)].value);
+        }
+        printf("\n");
+    }
+    
 
     fclose(fp);
     free(byteBuffer);

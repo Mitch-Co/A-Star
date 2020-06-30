@@ -77,10 +77,7 @@ typedef struct BMPDIBHEADER {
 } BMP_DIB;
 
 typedef struct BMPPIXEL {
-    int red;
-    int blue;
-    int green;
-    int alpha;
+    uint32_t value;
 
 } PIXEL;
 
@@ -93,7 +90,7 @@ typedef struct BMPDATA {
     bool hasAlpha;
     int bitsForAlpha;
 
-    PIXEL* data;
+    PIXEL* colorData;
 
 } BMP_DATA;
 
