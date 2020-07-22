@@ -604,9 +604,9 @@ bool writeBMP(char fileName[], BMP* toWrite)
     {
         for(int x = 0; x < pixelsPerRow; x++)
         {
-            returnChk = fwrite(&((toWrite->data.colorData)[x + (pixelsPerRow * y)].value), sizeof(uint32_t), 1, fp);
+            returnChk = fwrite(&((toWrite->data.colorData)[x + (pixelsPerRow * y)].value), bytesPerPixel, 1, fp);
             if(returnChk != 1) { goto writeError; }
-            fileSize += sizeof(uint32_t);
+            fileSize += bytesPerPixel;
         }
         fseek(fp, rowPadding, SEEK_CUR);
         fileSize += rowPadding;
