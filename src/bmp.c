@@ -277,9 +277,14 @@ BMP* readBMP(char fileName[])
         return NULL;
     }
     bitDepth = bytesToUINT32(byteBuffer, 4);
+
+    //TODO: TEST IF 16, 12, and 8 bpp bitmaps work with reading/writing (they should with little to no change)
+    //TODO: ACTUALLY TO ADD LESSER COLORS YOU NEED TO ADD SUPPORT FOR THE COLOR TABLE
+    //TODO: ADD SUPPORT FOR THE COLOR TABLE
     if(bitDepth != 32 && bitDepth != 24)
     {
         errMsg("readBMP", "Bitmap file has unknown depth (only bit depths of 24 or 32 bits are able to be read)!");
+        printf("BITMAP DEPTH = %d\n", bitDepth);
         free(byteBuffer);
         freeBMP(&toReturn);
         fclose(fp);
@@ -431,15 +436,15 @@ BMP* readBMP(char fileName[])
     toReturn->data.colorData = pixArray;
 
     // TODO: Remove this test print statement
-    // for(int y = 0; y < tempHeight; y++)
-    // {
-    //     printf("y = %d - ", y);
-    //     for (int x = 0; x < tempWidth; x++)
-    //     {
-    //         printf("%x ",(toReturn->data.colorData)[x + (tempWidth * y)].value);
-    //     }
-    //     printf("\n");
-    // }
+    for(int y = 0; y < tempHeight; y++)
+    {
+        printf("y = %d - ", y);
+        for (int x = 0; x < tempWidth; x++)
+        {
+            printf("%x ",(toReturn->data.colorData)[x + (tempWidth * y)].value);
+        }
+        printf("\n");
+    }
     
 
     fclose(fp);
@@ -599,7 +604,7 @@ bool writeBMP(char fileName[], BMP* toWrite)
     rowSize = rowSize * 4;
     rowPadding = rowSize - (toWrite->dib.bmpWidth * (bytesPerPixel));
     
-    //printf ("\n\n\nWRITING - numrows = %d, rowPadding = %d, pixelsPerRow = %d\n",numRows,rowPadding,pixelsPerRow);
+    printf ("\n\n\nWRITING - numrows = %d, rowPadding = %d, pixelsPerRow = %d, bytesPerPixel = %d\n",numRows,rowPadding,pixelsPerRow, bytesPerPixel);
     
     for(int y = 0; y < numRows; y++)
     {
@@ -609,9 +614,13 @@ bool writeBMP(char fileName[], BMP* toWrite)
             if(returnChk != 1) { goto writeError; }
             fileSize += bytesPerPixel;
         }
-        returnChk = fwrite(&zero, rowPadding, 1, fp); // Writes zero for padding
-        if(returnChk != 1) { goto writeError; }
-        fileSize += rowPadding;
+        if(rowPadding != 0)
+        {
+            returnChk = fwrite(&zero, rowPadding, 1, fp); // Writes zero for padding
+            if(returnChk != 1) { goto writeError; }
+            fileSize += rowPadding;
+        }
+
     }
 
     // Go to and write file size

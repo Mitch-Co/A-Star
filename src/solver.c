@@ -1,11 +1,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
 #include "bmp.h"
 
 int main()
 {
-    BMP* testBMP = readBMP("6x6.bmp");
+    char* buffer = malloc(longestFileName * sizeof(char));
+    buffer = fgets(buffer, longestFileName, stdin);
+    
+    int inputSize = strlen(buffer);
+
+    char* name = malloc(inputSize * sizeof(char));
+    
+    for (int i = 0; i < inputSize; i++ )
+    {
+        name[i] = buffer[i];
+    }
+    name[inputSize - 1] = 0;
+
+    BMP* testBMP = readBMP(name);
     writeBMP("test.bmp",testBMP);
     freeBMP(&testBMP);
     return 0;
