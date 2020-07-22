@@ -402,7 +402,7 @@ BMP* readBMP(char fileName[])
     // TODO: bitsPerChannel, hasAlpha(?) bitsForAlpha
 
     PIXEL* pixArray = malloc(sizeof(PIXEL) * toReturn->data.area);
-    printf("rowsize = %d padding = %d\n", rowSize, rowPadding);
+    //printf("rowsize = %d padding = %d\n", rowSize, rowPadding);
 
     // Start at beginning of color data
     fseek(fp, toReturn->head.offset, SEEK_SET);
@@ -431,15 +431,15 @@ BMP* readBMP(char fileName[])
     toReturn->data.colorData = pixArray;
 
     // TODO: Remove this test print statement
-    for(int y = 0; y < tempHeight; y++)
-    {
-        printf("y = %d - ", y);
-        for (int x = 0; x < tempWidth; x++)
-        {
-            printf("%x ",(toReturn->data.colorData)[x + (tempWidth * y)].value);
-        }
-        printf("\n");
-    }
+    // for(int y = 0; y < tempHeight; y++)
+    // {
+    //     printf("y = %d - ", y);
+    //     for (int x = 0; x < tempWidth; x++)
+    //     {
+    //         printf("%x ",(toReturn->data.colorData)[x + (tempWidth * y)].value);
+    //     }
+    //     printf("\n");
+    // }
     
 
     fclose(fp);
@@ -484,7 +484,6 @@ bool writeBMP(char fileName[], BMP* toWrite)
        return NULL;
     }
 
-    printf("UUH OPENMING %s\n", fileName);
     fp = fopen(fileName, "wb");
 
     // Used to check the return value of various file functions
@@ -600,7 +599,8 @@ bool writeBMP(char fileName[], BMP* toWrite)
     rowSize = rowSize * 4;
     rowPadding = rowSize - (toWrite->dib.bmpWidth * (bytesPerPixel));
     
-    printf ("\n\n\nWRITING - numrows = %d, rowPadding = %d, pixelsPerRow = %d\n",numRows,rowPadding,pixelsPerRow);
+    //printf ("\n\n\nWRITING - numrows = %d, rowPadding = %d, pixelsPerRow = %d\n",numRows,rowPadding,pixelsPerRow);
+    
     for(int y = 0; y < numRows; y++)
     {
         for(int x = 0; x < pixelsPerRow; x++)
