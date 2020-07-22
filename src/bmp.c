@@ -501,6 +501,7 @@ bool writeBMP(char fileName[], BMP* toWrite)
     // Temp variables used in fwrite to write static data
     uint16_t toWrite16 = 0x0;
     uint32_t toWrite32 = 0x0;
+    const uint32_t zero = 0x0;
 
     // Write BMP signiture
     toWrite16 = bmpSignature;
@@ -608,7 +609,8 @@ bool writeBMP(char fileName[], BMP* toWrite)
             if(returnChk != 1) { goto writeError; }
             fileSize += bytesPerPixel;
         }
-        fseek(fp, rowPadding, SEEK_CUR);
+        returnChk = fwrite(&zero, rowPadding, 1, fp); // Writes zero for padding
+        if(returnChk != 1) { goto writeError; }
         fileSize += rowPadding;
     }
 
