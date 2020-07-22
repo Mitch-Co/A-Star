@@ -26,6 +26,7 @@ typedef struct BMPHEADER {
 } BMP_HEAD;
 
 // MODELED OFF OF BITMAPINFOHEADER DIB
+// ALL DATA STORED IN BIG ENDIAN
 typedef struct BMPDIBHEADER {
     
     // Should be 40 for BITMAPINFOHEADER
@@ -78,6 +79,10 @@ typedef struct BMPDIBHEADER {
 
 typedef struct BMPPIXEL {
     uint32_t value;
+    uint8_t red;
+    uint8_t green;
+    uint8_t blue;
+    uint8_t alpha;
 
 } PIXEL;
 
@@ -94,13 +99,7 @@ typedef struct BMPDATA {
 
 } BMP_DATA;
 
-typedef struct RAWBMP {
-    long long size;
-    BYTE* byteArray;
-} BMP_RAW;
-
 typedef struct BMPFILE {
-    BMP_RAW rawBMP;
 
     BMP_HEAD head;
     BMP_DIB dib;
@@ -117,12 +116,18 @@ void freeBMP();
 // Creates a BMP struct
 BMP* newBMP();
 
-// Takes an array of bytes in little endian and return a uint_32t of those bytes
+// Takes an array of bytes in little endian and return a uint_32t of those bytes in big endian
 uint32_t bytesToUINT32(BYTE* byteArray, int numBytes);
 
-// Takes an array of bytes in little endian and return a uint_32t of those bytes
+// Takes an array of bytes in little endian and return a uint_32t of those bytes in big endian
 uint16_t bytesToUINT16(BYTE* byteArray, int numBytes);
+
+uint16_t reverseEndian16(uint16_t toReverse);
+uint32_t reverseEndian32(uint32_t toReverse);
+
 // Reads in a BMP file and returns a BMP struct as a pointer
 BMP* readBMP(char fileName[]);
+
+bool writeBMP(char fileName[], BMP* toWrite);
 
 #endif

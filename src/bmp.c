@@ -28,6 +28,7 @@ BMP* newBMP()
 }
 
 // NOTE: BYTEARRAY IN LITTLE ENDIAN
+// OUTPUT IN BIG ENDIAN
 uint32_t bytesToUINT32(BYTE* byteArray, int numBytes)
 {
     uint32_t toReturn = 0x0;
@@ -59,6 +60,7 @@ uint32_t bytesToUINT32(BYTE* byteArray, int numBytes)
 }
 
 // NOTE: BYTEARRAY IN LITTLE ENDIAN
+// OUTPUT IN BIG ENDIAN
 uint16_t bytesToUINT16(BYTE* byteArray, int numBytes)
 {
     uint16_t toReturn = 0x0;
@@ -87,6 +89,18 @@ uint16_t bytesToUINT16(BYTE* byteArray, int numBytes)
     }
 
     return toReturn;
+}
+
+uint16_t reverseEndian16(uint16_t toReverse)
+{
+    return toReverse>>8 | toReverse<<8;
+}
+uint32_t reverseEndian32(uint32_t toReverse)
+{
+    // Moves byte 1 to 4, Moves byte 4 to 1, Moves byte 3 to 2, Moves byte 2 to 3
+    // The "Magic Numbers" 0xff00 and 0xff0000 are masks to only allow bytes 2 and 3 in the OR operation
+    // Bytes 1 and 4 do not need these magic numbers, because shifting left or right 24 bits removes all other bytes besides 1 and 4
+    return toReverse>>24 | toReverse<<24 | ((toReverse>>8)&0xff00) | ((toReverse<<8)&0xff0000);
 }
 
 
@@ -205,11 +219,8 @@ BMP* readBMP(char fileName[])
     listedSize = bytesToUINT32(byteBuffer, 4);
     if(listedSize != fileSize)
     {
-        errMsg("readBMP", "File header contains invalid file size!");
-        free(byteBuffer);
-        freeBMP(&toReturn);
-        fclose(fp);
-        return NULL;
+        printf("\n[WARNING] BITMAP HEADER LISTED SIZE NOT EQUAL TO ACTUAL SIZE [WARNING]\n");
+        printf("\n[WARNING] BITMAP HEADER LISTED SIZE NOT EQUAL TO ACTUAL SIZE [WARNING]\n");
     }
 
     //Check if header is BITMAPINFOHEADER or newer
@@ -442,8 +453,182 @@ BMP* readBMP(char fileName[])
     fclose(fp);
     return NULL;
 
-
 }
+
+
+bool writeBMP(char fileName[], BMP* toWrite)
+{
+    /* INITIALIZATION AND ERROR CHECKING */
+
+    if(fileName == NULL || toWrite == NULL)
+    {
+        errMsg("writeBMP", "input file name or bitmap struct is NULL!");
+        return NULL;
+    }
+
+    FILE* fp = NULL;
+    int fileNameSize = strlen(fileName);
+
+    // File name must be within acceptable bounds
+    // File name must be at least long enough to hold ".bmp" and have at least a single character name (5 char)
+    if(fileNameSize > longestFileName || fileNameSize < 5)
+    {
+       errMsg("readBMP", "File name outside of allowable size bounds");
+       return NULL;
+    }
+
+    // Error triggers if filename does not end in ".bmp"
+    if(fileName[fileNameSize - 4] != '.' || fileName[fileNameSize - 3] != 'b' || fileName[fileNameSize - 2] != 'm' || fileName[fileNameSize - 1] != 'p')
+    {
+       errMsg("writeBMP", "File name not valid \".bmp\" file!");
+       return NULL;
+    }
+
+    printf("UUH OPENMING %s\n", fileName);
+    fp = fopen(fileName, "wb");
+
+    // Used to check the return value of various file functions
+    int returnChk = 0;
+    
+    // Set file pointer to beginning of file (unnessisary)
+    fseek(fp, 0x0, SEEK_SET);
+
+    /* START WRITING TO FILE */
+
+    // Used to store the new file size as stuff is written
+    int32_t fileSize = 0x0;
+
+    // Temp variables used in fwrite to write static data
+    uint16_t toWrite16 = 0x0;
+    uint32_t toWrite32 = 0x0;
+
+    // Write BMP signiture
+    toWrite16 = bmpSignature;
+    returnChk = fwrite(&toWrite16, sizeof(uint16_t), 1, fp);
+    if(returnChk != 1) { goto writeError; }
+    fileSize += sizeof(uint16_t); 
+
+    // Skip filesize, reserved and offset, go to BMP header 
+    fseek(fp, 0x0E, SEEK_SET);
+    fileSize += sizeof(uint32_t) * 3;
+
+    // Write header size (40 for BITMAPINFOHEADER)
+    toWrite32 = 0x28; // 40 in decimal
+    returnChk = fwrite(&toWrite32, sizeof(uint32_t), 1, fp);
+    if(returnChk != 1) { goto writeError; }
+    fileSize += sizeof(uint32_t);
+
+    // Write bmpWidth
+    toWrite32 = toWrite->dib.bmpWidth;
+    returnChk = fwrite(&toWrite32, sizeof(uint32_t), 1, fp);
+    if(returnChk != 1) { goto writeError; }
+    fileSize += sizeof(uint32_t);
+    
+    // Write bmpHeight
+    toWrite32 = toWrite->dib.bmpHeight;
+    returnChk = fwrite(&toWrite32, sizeof(uint32_t), 1, fp);
+    if(returnChk != 1) { goto writeError; }
+    fileSize += sizeof(uint32_t);
+    
+    // Write colorPlanes
+    toWrite16 = 1; // Must be 1 according to spec
+    returnChk = fwrite(&toWrite16, sizeof(uint16_t), 1, fp);
+    if(returnChk != 1) { goto writeError; }
+    fileSize += sizeof(uint16_t);
+
+    // Write bitsPerPixel
+    toWrite16 = toWrite->dib.bitsPerPixel;
+    returnChk = fwrite(&toWrite16, sizeof(uint16_t), 1, fp);
+    if(returnChk != 1) { goto writeError; }
+    fileSize += sizeof(uint16_t);
+
+    // Write compression
+    toWrite32 = 0; // No compression
+    returnChk = fwrite(&toWrite32, sizeof(uint32_t), 1, fp);
+    if(returnChk != 1) { goto writeError; }
+    fileSize += sizeof(uint32_t);
+
+    // Write imageSize
+    toWrite32 = toWrite->dib.imageSize;
+    returnChk = fwrite(&toWrite32, sizeof(uint32_t), 1, fp);
+    if(returnChk != 1) { goto writeError; }
+    fileSize += sizeof(uint32_t);
+
+    // Write resWidthPPM
+    toWrite32 = 0; // This is dumb and nobody uses this
+    returnChk = fwrite(&toWrite32, sizeof(uint32_t), 1, fp);
+    if(returnChk != 1) { goto writeError; }
+    fileSize += sizeof(uint32_t);
+
+    // Write resHeightPPM
+    toWrite32 = 0; // This is dumb and nobody uses this
+    returnChk = fwrite(&toWrite32, sizeof(uint32_t), 1, fp);
+    if(returnChk != 1) { goto writeError; }
+     fileSize += sizeof(uint32_t);
+
+    // Write colorPalette
+    toWrite32 = toWrite->dib.colorPalette; 
+    returnChk = fwrite(&toWrite32, sizeof(uint32_t), 1, fp);
+    if(returnChk != 1) { goto writeError; }
+    fileSize += sizeof(uint32_t);
+
+    // Write importantColors
+    toWrite32 = toWrite->dib.importantColors; 
+    returnChk = fwrite(&toWrite32, sizeof(uint32_t), 1, fp);
+    if(returnChk != 1) { goto writeError; }
+    fileSize += sizeof(uint32_t);
+
+    // Go to and write offset
+    fseek(fp, 0x0A, SEEK_SET);
+
+    toWrite32 = fileSize; 
+    returnChk = fwrite(&toWrite32, sizeof(uint32_t), 1, fp);
+    if(returnChk != 1) { goto writeError; }
+
+    // Return to current position and start writing pixel data
+    fseek(fp, fileSize, SEEK_SET);
+
+    //Calculate padding (same as in readBMP)
+    int rowSize = 0;
+    int rowPadding = 0;
+    int pixelsPerRow = toWrite->dib.bmpWidth;
+    int numRows = toWrite->dib.bmpHeight;
+
+    int bytesPerPixel = toWrite->dib.bitsPerPixel/8;
+    rowSize = ((toWrite->dib.bmpWidth * toWrite->dib.bitsPerPixel) + 31) / 32;
+    rowSize = rowSize * 4;
+    rowPadding = rowSize - (toWrite->dib.bmpWidth * (bytesPerPixel));
+    
+    printf ("\n\n\nWRITING - numrows = %d, rowPadding = %d, pixelsPerRow = %d\n",numRows,rowPadding,pixelsPerRow);
+    for(int y = 0; y < numRows; y++)
+    {
+        for(int x = 0; x < pixelsPerRow; x++)
+        {
+            returnChk = fwrite(&((toWrite->data.colorData)[x + (pixelsPerRow * y)].value), sizeof(uint32_t), 1, fp);
+            if(returnChk != 1) { goto writeError; }
+            fileSize += sizeof(uint32_t);
+        }
+        fseek(fp, rowPadding, SEEK_CUR);
+        fileSize += rowPadding;
+    }
+
+    // Go to and write file size
+    fseek(fp, 0x02, SEEK_SET);
+
+    toWrite32 = fileSize; 
+    returnChk = fwrite(&toWrite32, sizeof(uint32_t), 1, fp);
+    if(returnChk != 1) { goto writeError; }
+
+    fclose(fp);
+    return true;
+
+    writeError:
+    fclose(fp);
+    errMsg("writeBMP", "Writing to BMP file failed!");
+    return false;
+}
+
+
 
 
 

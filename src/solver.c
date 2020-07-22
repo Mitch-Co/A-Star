@@ -5,7 +5,8 @@
 
 int main()
 {
-    BMP* testBMP = readBMP("9x9.bmp");
+    BMP* testBMP = readBMP("thumb079.bmp");
+    writeBMP("test.bmp",testBMP);
     freeBMP(&testBMP);
     return 0;
 }
