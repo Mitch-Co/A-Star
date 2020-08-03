@@ -179,11 +179,11 @@ BMP* readBMP(char fileName[])
     uint32_t listedSize = 0;
     uint32_t headerSize = 0;
     uint32_t compression = 0;
-    uint32_t bitDepth = 0;
+    uint16_t bitDepth = 0;
 
     // Check for bitmap header signature at beginning of file
-    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 2, fp);
-    if (returnChk != sizeof(BYTE) * 2)
+    returnChk = fread(&signiture, sizeof(uint16_t), 1, fp);
+    if (returnChk != 1)
     {
         errMsg("readBMP", "File is not a bitmap file (does not have valid bitmap signature)!");
         free(byteBuffer);
@@ -191,7 +191,6 @@ BMP* readBMP(char fileName[])
         fclose(fp);
         return NULL;
     }
-    signiture = bytesToUINT16(byteBuffer, 2);
     if(signiture != bmpSignature)
     {
         errMsg("readBMP", "File is not a bitmap file (does not have valid bitmap signature)!");
@@ -202,31 +201,31 @@ BMP* readBMP(char fileName[])
     }
 
     // Seek to end of file to find length
-    fseek(fp, 0L, SEEK_END);
+    fseek(fp, 0, SEEK_END);
     fileSize = ftell(fp);
 
     // Seek to 0x2 (long) (position of fileSize)
     fseek(fp, 0x2L, SEEK_SET);
-    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
-    if(returnChk != sizeof(BYTE) * 4)
+    returnChk = fread(&listedSize, sizeof(uint32_t), 1, fp);
+    if(returnChk != 1)
     {
-        errMsg("readBMP", "");
+        errMsg("readBMP", "File is not a bitmap file (does not have valid file size)!");
         free(byteBuffer);
         freeBMP(&toReturn);
         fclose(fp);
         return NULL;
     }
-    listedSize = bytesToUINT32(byteBuffer, 4);
     if(listedSize != fileSize)
     {
         printf("\n[WARNING] BITMAP HEADER LISTED SIZE NOT EQUAL TO ACTUAL SIZE [WARNING]\n");
+        printf("\nActual file size = %ld\nFile Size in BMP Head = %d\n", fileSize, listedSize);
         printf("\n[WARNING] BITMAP HEADER LISTED SIZE NOT EQUAL TO ACTUAL SIZE [WARNING]\n");
     }
 
     //Check if header is BITMAPINFOHEADER or newer
     fseek(fp, 0x0EL, SEEK_SET);
-    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
-    if (returnChk != sizeof(BYTE) * 4)
+    returnChk = fread(&headerSize, sizeof(uint32_t), 1, fp);
+    if (returnChk != 1)
     {
         errMsg("readBMP", "File is not a bitmap file (does not have valid bitmap header)!");
         free(byteBuffer);
@@ -234,7 +233,6 @@ BMP* readBMP(char fileName[])
         fclose(fp);
         return NULL;
     }
-    headerSize = bytesToUINT32(byteBuffer, 4);
     if(headerSize < 40)
     {
         errMsg("readBMP", "Bitmap file has unknown header DIB!");
@@ -246,8 +244,8 @@ BMP* readBMP(char fileName[])
     
     // Check file compression
     fseek(fp, 0x1EL, SEEK_SET);
-    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
-    if (returnChk != sizeof(BYTE) * 4)
+    returnChk = fread(&compression, sizeof(uint32_t), 1, fp);
+    if (returnChk != 1)
     {
         errMsg("readBMP", "File is not a bitmap file (does not have valid bitmap header)!");
         free(byteBuffer);
@@ -255,7 +253,6 @@ BMP* readBMP(char fileName[])
         fclose(fp);
         return NULL;
     }
-    compression = bytesToUINT32(byteBuffer, 4);
     if(compression != 0x0)
     {
         errMsg("readBMP", "Bitmap file has compression enabled!\n readBMP only accepts non compressed bitmaps!");
@@ -267,8 +264,8 @@ BMP* readBMP(char fileName[])
 
     //Check bit depth
     fseek(fp, 0x1CL, SEEK_SET);
-    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
-    if (returnChk != sizeof(BYTE) * 4)
+    returnChk = fread(&bitDepth, sizeof(uint16_t), 1, fp);
+    if (returnChk != 1)
     {
         errMsg("readBMP", "File is not a bitmap file (does not have valid bitmap header)!");
         free(byteBuffer);
@@ -276,7 +273,6 @@ BMP* readBMP(char fileName[])
         fclose(fp);
         return NULL;
     }
-    bitDepth = bytesToUINT32(byteBuffer, 4);
 
     //TODO: TEST IF 16, 12, and 8 bpp bitmaps work with reading/writing (they should with little to no change)
     //TODO: ACTUALLY TO ADD LESSER COLORS YOU NEED TO ADD SUPPORT FOR THE COLOR TABLE
@@ -305,7 +301,6 @@ BMP* readBMP(char fileName[])
 
     toReturn->head.signiture = signiture;
     toReturn->head.fileSize = listedSize;
-
     toReturn->dib.headerSize = headerSize;
     toReturn->dib.compression = compression;
     toReturn->dib.bitsPerPixel = bitDepth;
@@ -316,57 +311,48 @@ BMP* readBMP(char fileName[])
 
     // offset
     fseek(fp, 0xAL, SEEK_SET);
-    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
-    if(returnChk != sizeof(BYTE) * 4) {goto pass2Error;}
-    toReturn->head.offset = bytesToUINT32(byteBuffer, 4);
+    returnChk = fread(&(toReturn->head.offset), sizeof(uint32_t), 1, fp);
+    if(returnChk != 1) {goto pass2Error;}
 
     // bmpWidth
     fseek(fp, 0x12L, SEEK_SET);
-    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
-    if(returnChk != sizeof(BYTE) * 4) {goto pass2Error;}
-    toReturn->dib.bmpWidth = bytesToUINT32(byteBuffer, 4);;
+    returnChk = fread(&(toReturn->dib.bmpWidth), sizeof(uint32_t), 1, fp);
+    if(returnChk != 1) {goto pass2Error;}
 
     // bmpHeight
     fseek(fp, 0x16L, SEEK_SET);
-    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
-    if(returnChk != sizeof(BYTE) * 4) {goto pass2Error;}
-    toReturn->dib.bmpHeight = bytesToUINT32(byteBuffer, 4);
+    returnChk = fread(&(toReturn->dib.bmpHeight),sizeof(uint32_t), 1, fp);
+    if(returnChk != 1) {goto pass2Error;}
 
     // colorPlanes
     fseek(fp, 0x1AL, SEEK_SET);
-    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 2, fp);
-    if(returnChk != sizeof(BYTE) * 2) {goto pass2Error;}
-    toReturn->dib.colorPlanes = bytesToUINT16(byteBuffer, 2);
+    returnChk = fread(&(toReturn->dib.colorPlanes), sizeof(uint16_t), 1, fp);
+    if(returnChk != 1) {goto pass2Error;}
 
     // imageSize
     fseek(fp, 0x22L, SEEK_SET);
-    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
-    if(returnChk != sizeof(BYTE) * 4) {goto pass2Error;}
-    toReturn->dib.imageSize = bytesToUINT32(byteBuffer, 4);
+    returnChk = fread(&(toReturn->dib.imageSize), sizeof(uint32_t), 1, fp);
+    if(returnChk != 1) {goto pass2Error;}
 
     // resWidthPPM
     fseek(fp, 0x26L, SEEK_SET);
-    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
-    if(returnChk != sizeof(BYTE) * 4) {goto pass2Error;}
-    toReturn->dib.resWidthPPM = bytesToUINT32(byteBuffer, 4);
+    returnChk = fread(&(toReturn->dib.resWidthPPM), sizeof(uint32_t), 1, fp);
+    if(returnChk != 1) {goto pass2Error;}
 
     // resHeightPPM
     fseek(fp, 0x2AL, SEEK_SET);
-    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
-    if(returnChk != sizeof(BYTE) * 4) {goto pass2Error;}
-    toReturn->dib.resHeightPPM = bytesToUINT32(byteBuffer, 4);
+    returnChk = fread(&(toReturn->dib.resHeightPPM), sizeof(uint32_t), 1, fp);
+    if(returnChk != 1) {goto pass2Error;}
 
     // colorPalette
     fseek(fp, 0x2EL, SEEK_SET);
-    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
-    if(returnChk != sizeof(BYTE) * 4) {goto pass2Error;}
-    toReturn->dib.colorPalette = bytesToUINT32(byteBuffer, 4);
+    returnChk = fread(&(toReturn->dib.colorPalette), sizeof(uint32_t), 1, fp);
+    if(returnChk != 1) {goto pass2Error;}
 
     // importantColors
     fseek(fp, 0x32L, SEEK_SET);
-    returnChk = fread(byteBuffer, sizeof(BYTE), sizeof(BYTE) * 4, fp);
-    if(returnChk != sizeof(BYTE) * 4) {goto pass2Error;}
-    toReturn->dib.importantColors = bytesToUINT32(byteBuffer, 4);
+    returnChk = fread(&(toReturn->dib.importantColors), sizeof(uint32_t), 1, fp);
+    if(returnChk != 1) {goto pass2Error;}
 
     /*
         Just your daily reminder that height and width are signed.
@@ -436,15 +422,15 @@ BMP* readBMP(char fileName[])
     toReturn->data.colorData = pixArray;
 
     // TODO: Remove this test print statement
-    for(int y = 0; y < tempHeight; y++)
-    {
-        printf("y = %d - ", y);
-        for (int x = 0; x < tempWidth; x++)
-        {
-            printf("%x ",(toReturn->data.colorData)[x + (tempWidth * y)].value);
-        }
-        printf("\n");
-    }
+    // for(int y = 0; y < tempHeight; y++)
+    // {
+    //     printf("y = %d - ", y);
+    //     for (int x = 0; x < tempWidth; x++)
+    //     {
+    //         printf("%x ",(toReturn->data.colorData)[x + (tempWidth * y)].value);
+    //     }
+    //     printf("\n");
+    // }
     
 
     fclose(fp);
