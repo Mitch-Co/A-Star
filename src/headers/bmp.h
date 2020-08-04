@@ -140,6 +140,14 @@ bool readDataBytes(BMP* toReturn, FILE* fp);
 // Checks if a string ends with a substring
 bool endsWith(char* toCheck, char* ending);
 
-bool writeBMP(char fileName[], BMP* toWrite);
+// Writes BMP to file
+bool writeBMP(BMP* toWrite, char* fileName);
+
+// Writes BMP image data
+bool writeData(BMP* toWrite, FILE* fp, uint32_t* fileSize);
+
+bool writeDataBits(BMP* toWrite, FILE* fp, uint32_t* fileSize);
+
+bool writeDataBytes(BMP* toWrite, FILE* fp, uint32_t* fileSize);
 
 #endif

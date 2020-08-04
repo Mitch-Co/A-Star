@@ -118,9 +118,11 @@ BMP* readBMP(char* fileName)
     BMP* toReturn = newBMP();
     if(toReturn == NULL)
     {
+        fclose(fp);
         return NULL;
     }
 
+    // Read headers
     if(!readHeader(toReturn,fp))
     {
         freeBMP(&toReturn);
@@ -134,7 +136,12 @@ BMP* readBMP(char* fileName)
         return NULL;
     }
 
-    readData(toReturn,fp);
+    // Read data
+    if(!readData(toReturn,fp))
+    {
+        freeBMP(&toReturn);
+        fclose(fp);
+    }
 
 
     fclose(fp);
@@ -362,7 +369,6 @@ bool readDataBits(BMP* toReturn, FILE* fp)
     rowSize = rowSize * 8;
 
     rowPadding = rowSize - (toReturn->dib.bmpWidth * toReturn->dib.bitsPerPixel);
-    printf("PADDING = %d\n", rowPadding);
 
     /* START FILLING IN BMPDATA*/
     toReturn->data.width = toReturn->dib.bmpWidth;
@@ -375,9 +381,9 @@ bool readDataBits(BMP* toReturn, FILE* fp)
     int tempWidth = toReturn->data.width;
     int tempBPP = toReturn->data.bitDepth;
     int returnChk = 0;
-    int bufferByte = 0;
     int bitsUntilBufferEnd = 0;
-
+    
+    uint8_t bufferByte = 0;
     uint8_t bitMask = (0xFF << (8 - tempBPP));
 
     PIXEL* pixArray = malloc(sizeof(PIXEL) * toReturn->data.area);
@@ -396,10 +402,16 @@ bool readDataBits(BMP* toReturn, FILE* fp)
                 }
                 bitsUntilBufferEnd = 8;
                 bitMask = (0xFF << (8 - tempBPP));
-            }
-            pixArray[x + (tempWidth * y)].value = bufferByte & bitMask;
+            };
+            pixArray[x + (tempWidth * y)].value = (bufferByte & bitMask)>>(bitsUntilBufferEnd - tempBPP);
             bitMask >>= tempBPP;
             bitsUntilBufferEnd -= tempBPP;
+        }
+        if(rowPadding/8 > 0)
+        {
+            // For some reason fseeking to skip the filler bytes does not work
+            //fseek(fp, (rowPadding/8), SEEK_CUR);
+            fread(&bufferByte, sizeof(uint8_t), rowPadding/8, fp);
         }
     }
 
@@ -544,35 +556,26 @@ bool endsWith(char* toCheck, char* ending)
 }
 
 
-bool writeBMP(char fileName[], BMP* toWrite)
+bool writeBMP(BMP* toWrite, char* fileName)
 {
     /* INITIALIZATION AND ERROR CHECKING */
 
     if(fileName == NULL || toWrite == NULL)
     {
-        errMsg("writeBMP", "input file name or bitmap struct is NULL!");
+        return NULL;
+    }
+    if(!endsWith(fileName,".bmp"))
+    {
         return NULL;
     }
 
+    // Open new file
     FILE* fp = NULL;
-    int fileNameSize = strlen(fileName);
-
-    // File name must be within acceptable bounds
-    // File name must be at least long enough to hold ".bmp" and have at least a single character name (5 char)
-    if(fileNameSize > longestFileName || fileNameSize < 5)
-    {
-       errMsg("readBMP", "File name outside of allowable size bounds");
-       return NULL;
-    }
-
-    // Error triggers if filename does not end in ".bmp"
-    if(fileName[fileNameSize - 4] != '.' || fileName[fileNameSize - 3] != 'b' || fileName[fileNameSize - 2] != 'm' || fileName[fileNameSize - 1] != 'p')
-    {
-       errMsg("writeBMP", "File name not valid \".bmp\" file!");
-       return NULL;
-    }
-
     fp = fopen(fileName, "wb");
+    if(fp == NULL)
+    {
+        return NULL;
+    }
 
     // Used to check the return value of various file functions
     int returnChk = 0;
@@ -580,15 +583,15 @@ bool writeBMP(char fileName[], BMP* toWrite)
     // Set file pointer to beginning of file (unnessisary)
     fseek(fp, 0x0, SEEK_SET);
 
-    /* START WRITING TO FILE */
-
     // Used to store the new file size as stuff is written
-    int32_t fileSize = 0x0;
+    uint32_t fileSize = 0x0;
 
     // Temp variables used in fwrite to write static data
     uint16_t toWrite16 = 0x0;
     uint32_t toWrite32 = 0x0;
-    const uint32_t zero = 0x0;
+
+    /* START WRITING TO FILE */
+    fseek(fp, 0x0, SEEK_SET);
 
     // Write BMP signiture
     toWrite16 = bmpSignature;
@@ -673,37 +676,9 @@ bool writeBMP(char fileName[], BMP* toWrite)
     returnChk = fwrite(&toWrite32, sizeof(uint32_t), 1, fp);
     if(returnChk != 1) { goto writeError; }
 
-    // Return to current position and start writing pixel data
-    fseek(fp, fileSize, SEEK_SET);
-
-    //Calculate padding (same as in readBMP)
-    int rowSize = 0;
-    int rowPadding = 0;
-    int pixelsPerRow = toWrite->dib.bmpWidth;
-    int numRows = toWrite->dib.bmpHeight;
-
-    int bytesPerPixel = toWrite->dib.bitsPerPixel/8;
-    rowSize = ((toWrite->dib.bmpWidth * toWrite->dib.bitsPerPixel) + 31) / 32;
-    rowSize = rowSize * 4;
-    rowPadding = rowSize - (toWrite->dib.bmpWidth * (bytesPerPixel));
-    
-    printf ("\n\n\nWRITING - numrows = %d, rowPadding = %d, pixelsPerRow = %d, bytesPerPixel = %d\n",numRows,rowPadding,pixelsPerRow, bytesPerPixel);
-    
-    for(int y = 0; y < numRows; y++)
+    if(!writeData(toWrite, fp, &fileSize))
     {
-        for(int x = 0; x < pixelsPerRow; x++)
-        {
-            returnChk = fwrite(&((toWrite->data.colorData)[x + (pixelsPerRow * y)].value), bytesPerPixel, 1, fp);
-            if(returnChk != 1) { goto writeError; }
-            fileSize += bytesPerPixel;
-        }
-        if(rowPadding != 0)
-        {
-            returnChk = fwrite(&zero, rowPadding, 1, fp); // Writes zero for padding
-            if(returnChk != 1) { goto writeError; }
-            fileSize += rowPadding;
-        }
-
+        goto writeError;
     }
 
     // Go to and write file size
@@ -720,6 +695,135 @@ bool writeBMP(char fileName[], BMP* toWrite)
     fclose(fp);
     errMsg("writeBMP", "Writing to BMP file failed!");
     return false;
+}
+
+bool writeData(BMP* toWrite, FILE* fp, uint32_t* fileSize)
+{
+    if(toWrite == NULL || fp == NULL || fileSize == NULL)
+    {
+        return false;
+    }
+
+    bool success = true;
+    if(toWrite->dib.bitsPerPixel < 8)
+    {
+        success = writeDataBits(toWrite, fp, fileSize);
+    }
+    else
+    {
+        success = writeDataBytes(toWrite, fp, fileSize);
+    }
+    
+    return success;
+}
+
+bool writeDataBits(BMP* toWrite, FILE* fp, uint32_t* fileSize)
+{
+    if(toWrite == NULL || fp == NULL || fileSize == NULL)
+    {
+        return false;
+    }
+
+    // Return to current position and start writing pixel data
+    fseek(fp, (*fileSize), SEEK_SET);
+
+    int returnChk = 0;
+
+    int rowSize = 0;
+    int rowPadding = 0;
+
+    rowSize = ((toWrite->dib.bmpWidth * toWrite->dib.bitsPerPixel) + 31) / 32;
+    rowSize = rowSize * 4;
+
+    //rowSize is in bytes, and we want it in bits
+    rowSize = rowSize * 8;
+    rowPadding = rowSize - (toWrite->dib.bmpWidth * toWrite->dib.bitsPerPixel);
+
+    uint8_t packedByte = 0;
+    int currentBitsInByte = 8;
+    int rowTarget = rowSize;
+
+    int tempBPP = toWrite->data.bitDepth;
+    int numRows = toWrite->data.height;
+    int pixelsPerRow = toWrite->data.width;
+
+    for(int y = 0; y < numRows; y++)
+    {
+        rowTarget = rowSize;
+        currentBitsInByte = 8;
+        for(int x = 0; x < pixelsPerRow; x++)
+        {
+            rowTarget -= tempBPP;
+            packedByte <<= tempBPP;
+            packedByte += (toWrite->data.colorData)[x + (pixelsPerRow * y)].value;
+            currentBitsInByte -= tempBPP;
+
+            if(currentBitsInByte <= 0)
+            {
+                returnChk = fwrite(&packedByte, sizeof(uint8_t), 1, fp);
+                if(returnChk != 1) { return false; }
+                (*fileSize) += 1;
+                currentBitsInByte = 8;
+                packedByte = 0;
+            }
+
+        }
+        while(rowTarget > 0)
+        {
+            rowTarget -= tempBPP;
+            packedByte <<= tempBPP;
+            currentBitsInByte -= tempBPP;
+
+            if(currentBitsInByte <= 0)
+            {
+                returnChk = fwrite(&packedByte, sizeof(uint8_t), 1, fp);
+                if(returnChk != 1) { return false; }
+                (*fileSize) += 1;
+                currentBitsInByte = 8;
+                packedByte = 0;
+            }
+        }
+
+    }
+
+    return true;
+}
+
+bool writeDataBytes(BMP* toWrite, FILE* fp, uint32_t* fileSize)
+{
+    // Return to current position and start writing pixel data
+    fseek(fp, (*fileSize), SEEK_SET);
+
+    const uint32_t zero = 0x0;
+    int returnChk = 0x0;
+
+    int rowSize = 0;
+    int rowPadding = 0;
+    int pixelsPerRow = toWrite->dib.bmpWidth;
+    int numRows = toWrite->dib.bmpHeight;
+
+    int bytesPerPixel = toWrite->dib.bitsPerPixel/8;
+    rowSize = ((toWrite->dib.bmpWidth * toWrite->dib.bitsPerPixel) + 31) / 32;
+    rowSize = rowSize * 4;
+    rowPadding = rowSize - (toWrite->dib.bmpWidth * (bytesPerPixel));
+    printf ("\nWRITING - numrows = %d, rowPadding = %d, pixelsPerRow = %d, bytesPerPixel = %d\n",numRows,rowPadding,pixelsPerRow, bytesPerPixel);
+    for(int y = 0; y < numRows; y++)
+    {
+        for(int x = 0; x < pixelsPerRow; x++)
+        {
+            returnChk = fwrite(&((toWrite->data.colorData)[x + (pixelsPerRow * y)].value), bytesPerPixel, 1, fp);
+            if(returnChk != 1) { return false; }
+            (*fileSize) += bytesPerPixel;
+        }
+        if(rowPadding != 0)
+        {
+            returnChk = fwrite(&zero, rowPadding, 1, fp); // Writes zeros for padding
+            if(returnChk != 1) { return false; }
+            (*fileSize) += rowPadding;
+        }
+
+    }
+    return true;
 }
 
 

@@ -20,7 +20,7 @@ int main()
     name[inputSize - 1] = 0;
 
     BMP* testBMP = readBMP(name);
-    writeBMP("test.bmp",testBMP);
+    writeBMP(testBMP,"test.bmp");
     freeBMP(&testBMP);
     return 0;
 }
