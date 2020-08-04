@@ -91,7 +91,6 @@ typedef struct BMPDATA {
     int height;
     int area;
     int bitDepth;
-    int bitsPerChannel;
     bool hasAlpha;
     int bitsForAlpha;
 
@@ -122,11 +121,24 @@ uint32_t bytesToUINT32(BYTE* byteArray, int numBytes);
 // Takes an array of bytes in little endian and return a uint_32t of those bytes in big endian
 uint16_t bytesToUINT16(BYTE* byteArray, int numBytes);
 
-uint16_t reverseEndian16(uint16_t toReverse);
-uint32_t reverseEndian32(uint32_t toReverse);
-
 // Reads in a BMP file and returns a BMP struct as a pointer
-BMP* readBMP(char fileName[]);
+BMP* readBMP(char* fileName);
+
+// Verifies and reads the file header
+bool readHeader(BMP* toReturn, FILE* fp);
+
+// Reads the DIB Header
+bool readDIB(BMP* toReturn, FILE* fp);
+
+// Reads the bitmap color data
+bool readData(BMP* toReturn, FILE* fp);
+
+bool readDataBits(BMP* toReturn, FILE* fp);
+
+bool readDataBytes(BMP* toReturn, FILE* fp);
+
+// Checks if a string ends with a substring
+bool endsWith(char* toCheck, char* ending);
 
 bool writeBMP(char fileName[], BMP* toWrite);
 
