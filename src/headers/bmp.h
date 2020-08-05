@@ -7,9 +7,6 @@
 #define longestFileName 100
 #define bmpSignature 0x4d42
 
-
-typedef uint8_t BYTE;
-
 typedef struct BMPHEADER {
     //Should be 0x4d42 to identify bitmap file
     uint16_t signiture;
@@ -67,7 +64,7 @@ typedef struct BMPDIBHEADER {
     int32_t resWidthPPM;
     int32_t resHeightPPM;
 
-    // Number of colors in color palette
+    // Number of colors in color table
     uint32_t colorPalette;
     
     // Number of important colors
@@ -76,6 +73,11 @@ typedef struct BMPDIBHEADER {
     uint32_t importantColors;
 
 } BMP_DIB;
+
+typedef struct BMPCOLORTABLE {
+    uint32_t* entries;
+    uint32_t length;
+} COLOR_TABLE;
 
 typedef struct BMPPIXEL {
     uint32_t value;
@@ -91,8 +93,12 @@ typedef struct BMPDATA {
     int height;
     int area;
     int bitDepth;
+
     bool hasAlpha;
     int bitsForAlpha;
+
+    bool HasCTable;
+    COLOR_TABLE cTable;
 
     PIXEL* colorData;
 
@@ -115,12 +121,6 @@ void freeBMP();
 // Creates a BMP struct
 BMP* newBMP();
 
-// Takes an array of bytes in little endian and return a uint_32t of those bytes in big endian
-uint32_t bytesToUINT32(BYTE* byteArray, int numBytes);
-
-// Takes an array of bytes in little endian and return a uint_32t of those bytes in big endian
-uint16_t bytesToUINT16(BYTE* byteArray, int numBytes);
-
 // Reads in a BMP file and returns a BMP struct as a pointer
 BMP* readBMP(char* fileName);
 
@@ -137,6 +137,8 @@ bool readDataBits(BMP* toReturn, FILE* fp);
 
 bool readDataBytes(BMP* toReturn, FILE* fp);
 
+bool readColorTable(BMP* toReturn, FILE* fp);
+
 // Checks if a string ends with a substring
 bool endsWith(char* toCheck, char* ending);
 
@@ -149,5 +151,9 @@ bool writeData(BMP* toWrite, FILE* fp, uint32_t* fileSize);
 bool writeDataBits(BMP* toWrite, FILE* fp, uint32_t* fileSize);
 
 bool writeDataBytes(BMP* toWrite, FILE* fp, uint32_t* fileSize);
+
+bool writeColorTable(BMP* toWrite, FILE* fp, uint32_t* fileSize);
+
+int power(int base, int exp);
 
 #endif

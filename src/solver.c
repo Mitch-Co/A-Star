@@ -18,7 +18,6 @@ int main()
         name[i] = buffer[i];
     }
     name[inputSize - 1] = 0;
-
     BMP* testBMP = readBMP(name);
     writeBMP(testBMP,"test.bmp");
     freeBMP(&testBMP);

@@ -4,6 +4,7 @@
 #include <string.h>
 #include "bmp.h"
 
+//TODO: ADD ERROR MESSAGES TO ALL FUNCTIONS
 void errMsg(char func[],char err[])
 {
     printf("Error in function %s - %s\n", func, err);
@@ -26,72 +27,6 @@ BMP* newBMP()
     toReturn->data.colorData = NULL;
     return toReturn;
 }
-
-// NOTE: BYTEARRAY IN LITTLE ENDIAN
-// OUTPUT IN BIG ENDIAN
-uint32_t bytesToUINT32(BYTE* byteArray, int numBytes)
-{
-    uint32_t toReturn = 0x0;
-    
-    // Input Checking
-    if(byteArray == NULL)
-    {
-        return toReturn;
-    }
-    if (numBytes <= 0)
-    {
-        return toReturn;
-    }
-    if (numBytes > 4)
-    {
-        numBytes = 4;
-    }
-
-    // Conversion starts at numBytes because byteArray is in little endian
-    for(int i = numBytes - 1; i >= 0; i--)
-    {
-        // Bitshift by 8 to bump the previous byte added up one byte
-        // EXAMPLE: 0000000011111111 --> 1111111100000000
-        toReturn <<= 8;
-        toReturn += byteArray[i];
-    }
-
-    return toReturn;
-}
-
-// NOTE: BYTEARRAY IN LITTLE ENDIAN
-// OUTPUT IN BIG ENDIAN
-uint16_t bytesToUINT16(BYTE* byteArray, int numBytes)
-{
-    uint16_t toReturn = 0x0;
-    
-    // Input Checking
-    if(byteArray == NULL)
-    {
-        return toReturn;
-    }
-    if (numBytes <= 0)
-    {
-        return toReturn;
-    }
-    if (numBytes > 2)
-    {
-        numBytes = 2;
-    }
-
-    // Conversion starts at numBytes because byteArray is in little endian
-    for(int i = numBytes - 1; i >= 0; i--)
-    {
-        // Bitshift by 8 to bump the previous byte added up one byte
-        // EXAMPLE: 0000000011111111 --> 1111111100000000
-        toReturn <<= 8;
-        toReturn += byteArray[i];
-    }
-
-    return toReturn;
-}
-
-
 
 BMP* readBMP(char* fileName) 
 {
@@ -130,6 +65,13 @@ BMP* readBMP(char* fileName)
         return NULL;
     }
     if(!readDIB(toReturn,fp))
+    {
+        freeBMP(&toReturn);
+        fclose(fp);
+        return NULL;
+    }
+
+    if(!readColorTable(toReturn,fp))
     {
         freeBMP(&toReturn);
         fclose(fp);
@@ -236,7 +178,7 @@ bool readHeader(BMP* toReturn, FILE* fp)
     //TODO: TEST IF 16, 12, and 8 bpp bitmaps work with reading/writing (they should with little to no change)
     //TODO: ACTUALLY TO ADD LESSER COLORS YOU NEED TO ADD SUPPORT FOR THE COLOR TABLE
     //TODO: ADD SUPPORT FOR THE COLOR TABLE
-    if(bitDepth != 32 && bitDepth != 24 && bitDepth != 4)
+    if(bitDepth != 1 && bitDepth != 2 && bitDepth != 4 && bitDepth != 8 && bitDepth != 16 && bitDepth != 24 && bitDepth != 32)
     {
         printf("BITMAP DEPTH = %d\n", bitDepth);
         return false;
@@ -412,20 +354,21 @@ bool readDataBits(BMP* toReturn, FILE* fp)
             // For some reason fseeking to skip the filler bytes does not work
             //fseek(fp, (rowPadding/8), SEEK_CUR);
             fread(&bufferByte, sizeof(uint8_t), rowPadding/8, fp);
+            bufferByte = 0;
         }
     }
 
     toReturn->data.colorData = pixArray;
 
-    for(int y = 0; y < tempHeight; y++)
-    {
-        printf("y = %d - ", y);
-        for (int x = 0; x < tempWidth; x++)
-        {
-            printf("%x ",(toReturn->data.colorData)[x + (tempWidth * y)].value);
-        }
-        printf("\n");
-    }
+    // for(int y = 0; y < tempHeight; y++)
+    // {
+    //     printf("y = %d - ", y);
+    //     for (int x = 0; x < tempWidth; x++)
+    //     {
+    //         printf("%x ",(toReturn->data.colorData)[x + (tempWidth * y)].value);
+    //     }
+    //     printf("\n");
+    // }
     
 
     return true;
@@ -477,14 +420,14 @@ bool readDataBytes(BMP* toReturn, FILE* fp)
 
     int returnChk = 0;
     uint32_t tempInt = 0;
-    BYTE* byteBuffer = malloc(sizeof(BYTE)* 8);
+    uint8_t* byteBuffer = malloc(sizeof(uint8_t)* 8);
     // Read in all pixel data
     for(int y = 0; y < tempHeight; y++)
     {
         for (int x = 0; x < tempWidth; x++)
         {
             // Grab pixel
-            returnChk = fread(byteBuffer, sizeof(BYTE), bytesPerPixel, fp);
+            returnChk = fread(byteBuffer, sizeof(uint8_t), bytesPerPixel, fp);
             if(returnChk != bytesPerPixel)
             {
                 return false;
@@ -521,6 +464,74 @@ bool readDataBytes(BMP* toReturn, FILE* fp)
     
 
     return true;
+}
+
+bool readColorTable(BMP* toReturn, FILE* fp)
+{
+    if(toReturn == NULL || fp == NULL)
+    {
+        return false;
+    }
+
+    if(toReturn->dib.bitsPerPixel > 16)
+    {
+        toReturn->data.HasCTable = false;
+        toReturn->data.cTable.length = 0;
+        return true;
+    }
+
+    int numColors = toReturn->dib.colorPalette;
+
+    if(numColors == 0)
+    {
+        numColors = power(2, toReturn->dib.bitsPerPixel);
+    }
+    // This is constant because its always almost 4, but apperently sometimes it is 3
+    // If the need to change this comes up, just un constant the variable
+    const int numBytesPerEntry = 4;
+
+    // The amount of available space between the bitmap DIB and the start of the data
+    int spaceForColorTable = toReturn->head.offset - (14 + toReturn->dib.headerSize);
+
+    if(numBytesPerEntry * numColors > spaceForColorTable)
+    {
+        if(toReturn->dib.colorPalette == 0)
+        {
+            toReturn->data.HasCTable = false;
+            toReturn->data.cTable.length = 0;
+            return true;
+        }
+        else
+        {
+           return false; 
+        }
+    }
+    uint32_t* colorValues = malloc(sizeof(uint32_t) * numColors);
+    int returnChk = 0;
+    uint32_t tempVal = 0;
+    fseek(fp, (14 + toReturn->dib.headerSize), SEEK_SET);;
+    for(int i = 0; i < numColors; i++)
+    {
+        tempVal = 0;
+        returnChk = fread(&tempVal, numBytesPerEntry, 1, fp);
+        if(returnChk != 1)
+        {
+            free(colorValues);
+            return false;
+        }
+        colorValues[i] = tempVal;
+    }
+    // for(int i = 0; i < numColors; i++)
+    // {
+    //     printf("COLOR TABLE %d - %x\n", i, colorValues[i]);
+    // }
+
+    toReturn->data.HasCTable = true;
+    toReturn->data.cTable.length = numColors;
+    toReturn->data.cTable.entries = colorValues;
+    
+    return true;
+
 }
 
 bool endsWith(char* toCheck, char* ending)
@@ -655,7 +666,7 @@ bool writeBMP(BMP* toWrite, char* fileName)
     toWrite32 = 0; // This is dumb and nobody uses this
     returnChk = fwrite(&toWrite32, sizeof(uint32_t), 1, fp);
     if(returnChk != 1) { goto writeError; }
-     fileSize += sizeof(uint32_t);
+    fileSize += sizeof(uint32_t);
 
     // Write colorPalette
     toWrite32 = toWrite->dib.colorPalette; 
@@ -668,6 +679,24 @@ bool writeBMP(BMP* toWrite, char* fileName)
     returnChk = fwrite(&toWrite32, sizeof(uint32_t), 1, fp);
     if(returnChk != 1) { goto writeError; }
     fileSize += sizeof(uint32_t);
+
+    if(!writeColorTable(toWrite, fp, &fileSize))
+    {
+        goto writeError;
+    }
+
+    /*
+        According to wikipedia specs the color data needs to start on an even multiple of 4 bytes
+        However, BMP readers seem to not like this extra padding
+        So I have commented it out
+    */
+
+    // toWrite32 = 0;
+    // while((ftell(fp) % 4) != 0)
+    // {
+    //     fwrite(&toWrite32, sizeof(uint8_t), 1, fp);
+    //     fileSize += sizeof(uint8_t);
+    // }
 
     // Go to and write offset
     fseek(fp, 0x0A, SEEK_SET);
@@ -730,14 +759,12 @@ bool writeDataBits(BMP* toWrite, FILE* fp, uint32_t* fileSize)
     int returnChk = 0;
 
     int rowSize = 0;
-    int rowPadding = 0;
 
     rowSize = ((toWrite->dib.bmpWidth * toWrite->dib.bitsPerPixel) + 31) / 32;
     rowSize = rowSize * 4;
 
     //rowSize is in bytes, and we want it in bits
     rowSize = rowSize * 8;
-    rowPadding = rowSize - (toWrite->dib.bmpWidth * toWrite->dib.bitsPerPixel);
 
     uint8_t packedByte = 0;
     int currentBitsInByte = 8;
@@ -791,6 +818,10 @@ bool writeDataBits(BMP* toWrite, FILE* fp, uint32_t* fileSize)
 
 bool writeDataBytes(BMP* toWrite, FILE* fp, uint32_t* fileSize)
 {
+    if(toWrite == NULL || fp == NULL || fileSize == NULL)
+    {
+        return false;
+    }
     // Return to current position and start writing pixel data
     fseek(fp, (*fileSize), SEEK_SET);
 
@@ -806,7 +837,6 @@ bool writeDataBytes(BMP* toWrite, FILE* fp, uint32_t* fileSize)
     rowSize = ((toWrite->dib.bmpWidth * toWrite->dib.bitsPerPixel) + 31) / 32;
     rowSize = rowSize * 4;
     rowPadding = rowSize - (toWrite->dib.bmpWidth * (bytesPerPixel));
-    printf ("\nWRITING - numrows = %d, rowPadding = %d, pixelsPerRow = %d, bytesPerPixel = %d\n",numRows,rowPadding,pixelsPerRow, bytesPerPixel);
     for(int y = 0; y < numRows; y++)
     {
         for(int x = 0; x < pixelsPerRow; x++)
@@ -824,6 +854,56 @@ bool writeDataBytes(BMP* toWrite, FILE* fp, uint32_t* fileSize)
 
     }
     return true;
+}
+
+bool writeColorTable(BMP* toWrite, FILE* fp, uint32_t* fileSize)
+{
+    if(toWrite == NULL || fp == NULL || fileSize == NULL)
+    {
+        return false;
+    }
+    if(!toWrite->data.HasCTable)
+    {
+        return true;
+    }
+
+    int numColors = toWrite->data.cTable.length;
+    int returnChk = 0;
+    
+    for(int i = 0; i < numColors; i++)
+    {
+        returnChk = fwrite(&((toWrite->data.cTable.entries)[i]), sizeof(uint32_t), 1, fp);
+        if(returnChk != 1){ return false; }
+        (*fileSize) += sizeof(uint32_t);
+    }
+    return true;
+}
+
+/*
+    Fast pow function ripped from 
+    https://stackoverflow.com/questions/25525536/write-pow-function-without-math-h-in-c
+
+    Having to link the entire math library for powers is crazy
+*/
+int power(int base, int exp)
+{
+    if(exp < 0) 
+    {
+        return -1;
+    }
+
+    int result = 1;
+    while (exp)
+    {
+        if (exp & 1)
+        {
+            result *= base;
+        }
+        exp >>= 1;
+        base *= base;
+    }
+
+    return result;
 }
 
 
